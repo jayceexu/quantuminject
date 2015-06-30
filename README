@@ -1,0 +1,118 @@
+The requirement for this program is on: http://www3.cs.stonybrook.edu/~mikepo/CSE508/hw/hw4.txt
+
+Part 0: Environment
+
+Run the quantuminject on VM and use the browser in host OS.
+Run the quantumdetect on VM, it can detect the attack.
+This has been tested successfully on Mac OS host and Ubuntu guest.
+
+Compiler: g++ (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
+
+!Caution: It SHOULD be ran on separete OS (one in VM, one in host), 
+          as professor Michalis suggest.
+
+
+Part 1: quantuminject
+
+1.1 Usage:
+
+Command:
+
+        sudo ./quantuminject -i eth0 -r "baidu" -d conf/inject.conf tcp
+
+After typing this command, and quickly use the browser to type the url:
+www.baidu.com
+Then it will display the hacked webpage with red font.
+
+1.2 Implementation:
+
+By using libnet api to accomplish constructing a fake packet.
+libnet_build_tcp/libnet_build_ipv4/libnet_build_ethernet
+to build the tcp/ip/ethernet respectively.
+
+And using pcre library to complete the regular expression part.
+
+Among above, I use (TH_PUSH | TH_ACK | TH_FIN) flags to set in the tcp header,
+don't forget the TH_FIN, as it explicitly close the connect so that 
+no further true packets can be arrived.
+
+For the conf.cc/conf.h, I cited some code from the airpwn for utility use, 
+to read configuration and html file.
+
+Part 2:
+
+1.1 Usage:
+
+Command:
+
+Detect from ethernet:
+
+       sudo ./quantumdetect -i eth0 tcp
+
+Detect from pcap file:
+
+       sudo ./quantumdetect -r testdata.pcap tcp
+
+The command is similar as the HW2. After that it will indicate which packet is fake
+packet and which is true one.
+
+1.2 Implementation:
+
+Most of the part derives from the HW2 except that it adds a hashmap to store and 
+retrieve the key-value pair.
+
+The key is (dest-ip << 32 | seq-number), the value is payload content.
+
+Each time on the pcap_callback, it will check if the key exists, if not, it will 
+insert it into the hashmap. If so, it will check if the payload matches the orignal
+one. 
+If the content matches the original one, it will ignore.
+If the content doesn't match, it will regard the new packet as the true packet, 
+and the previous content as the fake one. And then print the warning message.
+
+
+
+Sample output:
+I provide  a sample file "testdata.pcap". After running the quantumdetect, 
+the results are shown as follows:
+
+=======================analysis output==================================
+jian@jian-VirtualBox:~/Shared_folder/hw4.cc$ sudo ./quantumdetect -r testdata.pcap tcp
+[DEBUG] read from pcap file: testdata.pcap
+[DEBUG:quantumdetect.cc:79] 3-th arg is exp = tcp
+reading from file testdata.pcap, link-type EN10MB (Ethernet)
+WARNING! You are under attack !!
+The fake response is HTTP/1.1 200 OK
+Content-Type: text/html
+Connection: close
+
+<html>
+<head><title>Bravo!</title></head>
+
+<body>
+<center>
+<font size=+5 color=red>Bravo! <br> I got you !</font>
+</center>
+<hr>
+</body>
+</html>
+
+The true response is HTTP/1.1 200 OK
+Date: Thu, 21 May 2015 06:06:12 GMT
+Content-Type: text/html
+Transfer-Encoding: chunked
+Connection: Keep-Alive
+Cache-Control: private
+Expires: Thu, 21 May 2015 06:06:12 GMT
+Content-Encoding: gzip
+Server: BWS/1.1
+X-UA-Compatible: IE=Edge,chrome=1
+BDPAGETYPE: 2
+BDQID: 0xc12560cb0001d580
+BDUSERID: 177246174
+Set-Cookie: BDSVRTM=141; path=/
+Set-Cookie: BD_HOME=1; path=/
+Set-Cookie: H_PS_PSSID=13457_13637_1440_13520_13519_13075_10213_12867_14166_13692_10562_12723_14155_14173_14329_12157_13936_14309_14270_14182_8498_10634_13774_14194; path=/; domain=.baidu.com
+
+
+=======================analysis output==================================
